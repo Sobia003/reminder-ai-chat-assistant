@@ -1,0 +1,195 @@
+{
+  "name": "Reminder AI Chat assistant",
+  "nodes": [
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        0,
+        0
+      ],
+      "id": "fdd17135-a794-4fae-8fad-b29b907dca20",
+      "name": "When chat message received"
+    },
+    {
+      "parameters": {
+        "options": {
+          "systemMessage": "=You are a Reminder AI Assistant that manages reminders in Google Calendar.\n\nCURRENT DATE AND TIME:\n{{ $now.setZone('Asia/Karachi').toFormat('yyyy-MM-dd HH:mm:ss') }}\nTime zone: Asia/Karachi.\n\nYOUR TASKS:\n1. Create reminders in Google Calendar.\n2. List existing calendar events when asked.\n3. Update existing reminders when asked.\n\nRULES FOR CREATING REMINDERS:\n- Understand the reminder title, date, and time from the user's message.\n- Interpret today, tomorrow, and other relative dates using the current date and time above.\n- Never ask the user to confirm today's date.\n- Use complete date-time values in the Asia/Karachi time zone.\n- Unless the user specifies otherwise, make the event one hour long.\n- If the date or time is genuinely ambiguous, ask a clarification question.\n- When the required details are available, call the connected Google Calendar Create Event tool. Do not merely describe the action.\n- Supply the title, start time, and end time to the tool.\n- Do not claim an event was created unless the tool succeeds.\n- If a tool fails, explain the failure honestly.\n- Never invent a successful calendar operation.\n\nRULES FOR LISTING AND UPDATING:\n- When the user asks to update an existing reminder, first call the connected List Events tool to find the matching event.\n- Use the real Event ID returned by List Events. Never invent an Event ID.\n- Then call the connected Update Event tool to perform the requested change. Do not merely write or display text such as \"Calling Update Event\".\n- For a time change, provide all four parameters: Event_ID, Summary, Start, and End.\n- Preserve the existing title unless the user requests a title change.\n- Use complete ISO 8601 date-time values with the Asia/Karachi timezone offset (+05:00).\n- If multiple events match, ask the user which one they mean.\n- Wait for the actual tool result before reporting success.\n- If the tool is not executed or its result is missing, say that you could not verify the update. Never claim success without confirmation."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        208,
+        0
+      ],
+      "id": "d1b860c8-e1f6-4b53-8d80-3f0217df83a6",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "Create a reminder event in Google Calendar. Use the reminder title, start date and time, and end date and time supplied by the AI Agent. Start and end must be complete date-time values in the Asia/Karachi time zone. Call this tool whenever the user requests a new reminder. Do not merely describe the action; execute it. Report success only if the operation succeeds.",
+        "calendar": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_CALENDAR_ID",
+          "mode": "list",
+          "cachedResultName": "YOUR_GOOGLE_CALENDAR_NAME"
+        },
+        "start": "={{ $fromAI('Start', ``, 'string') }}",
+        "end": "={{ $fromAI('End', ``, 'string') }}",
+        "useDefaultReminders": false,
+        "additionalFields": {
+          "summary": "={{ $fromAI('Summary', ``, 'string') }}"
+        },
+        "remindersUi": {
+          "remindersValues": [
+            {
+              "method": "popup",
+              "minutes": 10
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.googleCalendarTool",
+      "typeVersion": 1.3,
+      "position": [
+        528,
+        240
+      ],
+      "id": "c0f82ad5-c3fd-4b8c-84e3-91ed9dd8014b",
+      "name": "Create an event in Google Calendar"
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-3.7-flash",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1.1,
+      "position": [
+        -368,
+        208
+      ],
+      "id": "1d071c99-9e3e-4ba0-be0b-a04b47c2baef",
+      "name": "Google Gemini Chat Model"
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "List events from the user's selected Google Calendar. Use this tool whenever the user asks to view, find, or list reminders or scheduled events. Return the event title, start time, end time, and event ID when available. Apply date filters when the user specifies a date or period. Do not invent events or claim that an event exists unless it appears in the tool output.",
+        "operation": "getAll",
+        "calendar": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_CALENDAR_ID",
+          "mode": "list",
+          "cachedResultName": "YOUR_GOOGLE_CALENDAR_NAME"
+        },
+        "timeMin": "={{ $fromAI('After', ``, 'string') }}",
+        "timeMax": "={{ $fromAI('Before', ``, 'string') }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleCalendarTool",
+      "typeVersion": 1.3,
+      "position": [
+        144,
+        240
+      ],
+      "id": "03cf255e-854e-47c9-9b6a-1cbf285d15ab",
+      "name": "Get many events in Google Calendar"
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "Update an event in Google CalendarUpdate an existing Google Calendar event. First use the List Events tool to find the event and obtain its real Event ID. Use that exact ID in Event_ID. Use Summary for the event's existing title unless the user requests a new title. Only call this tool when a matching existing event has been identified. Do not claim the event was updated unless the tool returns a successful result.\nFind the existing event using List Events first.\n\n",
+        "operation": "update",
+        "calendar": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_CALENDAR_ID",
+          "mode": "list",
+          "cachedResultName": "YOUR_GOOGLE_CALENDAR_NAME"
+        },
+        "eventId": "={{ $fromAI('Event_ID', 'The ID of the existing Google Calendar event to update', 'string') }}",
+        "updateFields": {
+          "end": "={{ $fromAI('End', 'The new end date and time of the existing event in ISO 8601 format, including the Asia/Karachi timezone offset', 'string') }}",
+          "start": "={{ $fromAI('Start', 'The new start date and time of the existing event in ISO 8601 format, including the Asia/Karachi timezone offset', 'string') }}",
+          "summary": "={{ $fromAI('Summary', ``, 'string') }}"
+        }
+      },
+      "type": "n8n-nodes-base.googleCalendarTool",
+      "typeVersion": 1.3,
+      "position": [
+        368,
+        208
+      ],
+      "id": "a6a6c416-f04b-4fd4-a652-67fb37d03fc8",
+      "name": "Update an event in Google Calendar"
+    }
+  ],
+  "connections": {
+    "When chat message received": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create an event in Google Calendar": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get many events in Google Calendar": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update an event in Google Calendar": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  }
+}
